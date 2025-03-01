@@ -38,7 +38,7 @@ class MainActivity : ComponentActivity() {
                             modifier = Modifier.padding(innerPadding)
                         )
                         SuperAltGreeting(
-                            name = "diddy",
+                            name = "andrew",
                             modifier = Modifier.padding(innerPadding)
                         )
                     }
