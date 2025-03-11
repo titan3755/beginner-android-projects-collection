@@ -1,6 +1,7 @@
 package com.example.quotes
 
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -11,7 +12,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonColors
 import androidx.compose.material3.Scaffold
@@ -26,7 +30,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.quotes.models.QuoteRandom
+import com.example.quotes.network.RtfClient
 import com.example.quotes.ui.theme.QuotesTheme
+import retrofit2.Call
+import retrofit2.Callback
+import retrofit2.Response
 
 val anton = FontFamily(
     Font(R.font.anton)
@@ -36,6 +45,8 @@ val bebas = FontFamily(
     Font(R.font.bebas_neue)
 )
 
+val defaultQuote: Pair<String, String> = "The only way to do great work is to love what you do." to "- Steve Jobs"
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -43,8 +54,8 @@ class MainActivity : ComponentActivity() {
         setContent {
             QuotesTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    var quote by remember { mutableStateOf("Loading quote...") }
-                    var author by remember { mutableStateOf("Author") }
+                    var quote by remember { mutableStateOf(defaultQuote.first) }
+                    var author by remember { mutableStateOf(defaultQuote.second) }
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
@@ -58,29 +69,35 @@ class MainActivity : ComponentActivity() {
                                 content = "Quotes",
                                 modifier = Modifier.padding(innerPadding)
                             )
-                            Spacer(
+                            Spacer(modifier = Modifier.height(10.dp)) // Small spacing
+
+                            Box(
                                 modifier = Modifier
-                                    .align(Alignment.CenterHorizontally)
-                                    .weight(1f) // Take up available space between header and body
-                            )
-                            Body(
-                                quote = "The only way to do great work is to love what you do.",
-                                author = "- Steve Jobs",
-                                modifier = Modifier.fillMaxWidth().align(Alignment.CenterHorizontally).padding(innerPadding)
-                            )
-                            Spacer(
-                                modifier = Modifier
-                                    .align(Alignment.CenterHorizontally)
-                                    .weight(1f) // Take up available space between content and button
-                            )
+                                    .weight(1f) // Allows scrolling but doesn't push the button off
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp)
+                            ) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .verticalScroll(rememberScrollState()), // Enables scrolling
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.Center
+                                ) {
+                                    Body(quote, author)
+                                }
+                            }
                             ButtonBar(
                                 modifier = Modifier
-                                    .align(Alignment.CenterHorizontally)
-                                    .padding(bottom = 40.dp),
+                                    .padding(16.dp), // Keeps button at bottom
                                 onClick = {
                                     // Update the quote and author when the button is clicked
-                                    quote = "This is a new quote!"
-                                    author = "- New Author"
+                                    quote = "Loading ..."
+                                    author = ""
+                                    fetchRandomQuote { newQuote, newAuthor ->
+                                        quote = newQuote
+                                        author = newAuthor
+                                    }
                                 }
                             )
                         }
@@ -89,6 +106,26 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+}
+
+private fun fetchRandomQuote(onQuoteFetched: (String, String) -> Unit) {
+    val call = RtfClient.instance.getQR()
+
+    call.enqueue(object : Callback<List<QuoteRandom>> {
+        override fun onResponse(call: Call<List<QuoteRandom>>, response: Response<List<QuoteRandom>>) {
+            if (response.isSuccessful && response.body() != null) {
+                val quoteResponse = response.body()!!.first()  // ZenQuotes API returns a list
+                onQuoteFetched(quoteResponse.q, "- ${quoteResponse.a}")
+            } else {
+                Log.e("Retrofit", "Failed to get quote")
+                onQuoteFetched("An error occurred, too many requests", "- Zenquotes.io")
+            }
+        }
+
+        override fun onFailure(call: Call<List<QuoteRandom>>, t: Throwable) {
+            Log.e("Retrofit", "Error: ${t.message}")
+        }
+    })
 }
 
 @Composable
